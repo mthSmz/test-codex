@@ -1,11 +1,31 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/today", "destination": "/api/today.js" },
-    { "source": "/api/cron-generate", "destination": "/api/cron-generate.js" },
-    { "source": "/api/rss-topics", "destination": "/api/rss-topics.js" }
+    {
+      "source": "/api/today",
+      "destination": "/api/today.js"
+    },
+    {
+      "source": "/api/cron-generate",
+      "destination": "/api/cron-generate.js"
+    },
+    {
+      "source": "/api/rss-topics",
+      "destination": "/api/rss-topics.js"
+    }
   ],
   "crons": [
-    { "path": "/api/cron-generate", "schedule": "0 13 * * *" }
+    {
+      "path": "/api/cron-generate",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/daily-rotate",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/daily-rotate",
+      "schedule": "0 14 * * *"
+    }
   ]
 }
