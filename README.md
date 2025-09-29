@@ -2,7 +2,7 @@
 Déployable sur **Vercel**.
 
 - API publique: `/api/today`  (lit KV)
-- Cron Vercel: `/api/cron-generate`  (protégé; génère 1×/jour à 13:00 UTC)
+- Cron Vercel: `/api/daily-rotate` (protégé; déclenche 1×/jour à 14:00 UTC pour garantir la génération à 15h/16h Paris)
 - Stockage: Vercel KV, clé `poem:YYYY-MM-DD`
 
 ## Variables d'environnement
