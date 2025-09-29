@@ -1,59 +1,65 @@
 import OpenAI from "openai";
-import { kv } from "@vercel/kv";
+import { Redis } from "@upstash/redis";
 
-// 1) Source hashtags : stub remplaçable
-async function getTrendingHashtags() {
-  // TODO: remplacer par une vraie source “tendances TikTok”.
-  const pools = [
-    ["#tendance", "#poesie", "#ville", "#lumiere", "#nuit"],
-    ["#musique", "#danse", "#cinema", "#foule", "#ecran"],
-    ["#pluie", "#metro", "#neon", "#histoire", "#instant"],
-    ["#cafe", "#lecture", "#automne", "#rue", "#souvenir"],
-  ];
-  return pools[Math.floor((Date.now() / 86400000) % pools.length)];
+const redis = Redis.fromEnv();
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+function getParisDate() {
+  const parisNow = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" })
+  );
+  const year = parisNow.getFullYear();
+  const month = String(parisNow.getMonth() + 1).padStart(2, "0");
+  const day = String(parisNow.getDate()).padStart(2, "0");
+  return { parisNow, key: `poem:${year}-${month}-${day}` };
+}
+
+async function getPlaceholderHashtags() {
+  return ["#aurore", "#macadam", "#fleuve", "#echo", "#velours"];
 }
 
 async function generatePoem(hashtags) {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   const prompt = `
-  Écris un poème libre (12 à 20 vers), évocateur et imagé, sans rimes systématiques.
-  Inspire-toi de ces hashtags/mots du jour : ${hashtags.join(" ")}.
-  Évite les clichés ; intègre les mots de façon sémantique, sans les répéter littéralement plus d'une fois.
-  `;
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-  const r = await client.chat.completions.create({
-    model,
-    messages: [{ role: "user", content: prompt }],
-    temperature: 0.95,
+Écris un poème libre en français de 12 à 20 vers.
+Inspire-toi de ces mots du jour : ${hashtags.join(", ")}.
+Chaque mot ne doit pas être répété littéralement plus d'une fois.
+Sois évocateur et inventif, sans contrainte de rimes systématiques.
+`;
+
+  const response = await openai.chat.completions.create({
+    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    messages: [{ role: "user", content: prompt.trim() }],
+    temperature: 0.9,
   });
-  return r.choices[0]?.message?.content?.trim() || "…";
+
+  return response.choices[0]?.message?.content?.trim() ?? "";
 }
 
 export default async function handler(req, res) {
-  // Sécurise l’appel (Vercel Cron enverra l’en-tête)
-  const auth = req.headers["x-cron-secret"];
-  if (!process.env.CRON_SECRET || auth !== process.env.CRON_SECRET) {
+  const providedSecret = req.headers["x-cron-secret"];
+  if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: "unauthorized" });
   }
 
-  // Date du jour à Paris
-  const parisNow = new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" });
-  const d = new Date(parisNow);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const key = `poem:${yyyy}-${mm}-${dd}`;
+  const { parisNow, key } = getParisDate();
 
-  // Si déjà généré, ne rien faire
-  const exists = await kv.exists(key);
-  if (exists) return res.status(200).json({ status: "exists" });
+  const exists = await redis.exists(key);
+  if (exists) {
+    return res.status(200).json({ status: "exists" });
+  }
 
-  const hashtags = await getTrendingHashtags();
+  const hashtags = await getPlaceholderHashtags();
   const poem = await generatePoem(hashtags);
-  const dateLabel = d.toLocaleDateString("fr-FR", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
-  const record = { date: dateLabel, hashtags, poem, generatedAt: new Date().toISOString() };
-  await kv.set(key, record, { ex: 60 * 60 * 24 * 3 }); // expire après 3 jours (sécurité)
+  const record = {
+    date: key.slice("poem:".length),
+    hashtags,
+    poem,
+    generatedAt: new Date().toISOString(),
+  };
 
-  res.status(200).json({ status: "created", key, hashtagsCount: hashtags.length });
+  await redis.set(key, record);
+  await redis.set("poem:latest", key);
+
+  return res.status(200).json({ status: "created", key });
 }
