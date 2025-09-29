@@ -1,16 +1,30 @@
 import { fetchRssTopics } from "../scripts/rss-topics.js";
 
-function parseInteger(value, defaultValue) {
-  if (typeof value !== "string") {
-    return defaultValue;
+function normalizeQueryInteger(value, { defaultValue, min, max }) {
+  const queryValue = Array.isArray(value) ? value[value.length - 1] : value;
+
+  if (queryValue === undefined) {
+    return { value: defaultValue };
   }
 
-  const parsed = Number.parseInt(value, 10);
+  if (typeof queryValue !== "string" || queryValue.trim() === "") {
+    return { error: "invalid_type" };
+  }
+
+  const parsed = Number.parseInt(queryValue, 10);
   if (Number.isNaN(parsed)) {
-    return defaultValue;
+    return { error: "invalid_integer" };
   }
 
-  return parsed;
+  if (typeof min === "number" && parsed < min) {
+    return { error: "out_of_range" };
+  }
+
+  if (typeof max === "number" && parsed > max) {
+    return { error: "out_of_range" };
+  }
+
+  return { value: parsed };
 }
 
 export default async function handler(req, res) {
@@ -19,7 +33,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "method_not_allowed" });
   }
 
-  const { feeds, limit, debug } = req.query;
+  const { feeds, limit, debug, maxPerFeed: rawMaxPerFeed } = req.query;
 
   const feedUrls = Array.isArray(feeds)
     ? feeds
@@ -27,19 +41,34 @@ export default async function handler(req, res) {
     ? feeds.split(",").map((item) => item.trim()).filter(Boolean)
     : undefined;
 
-  const maxPerFeed = parseInteger(req.query.maxPerFeed, undefined);
-  const topLimit = parseInteger(limit, 10);
+  const limitResult = normalizeQueryInteger(limit, { defaultValue: 10, min: 1 });
+  if (limitResult.error) {
+    return res.status(400).json({
+      error: "invalid_limit",
+      message: "limit must be a positive integer",
+    });
+  }
+
+  const maxPerFeedResult = normalizeQueryInteger(rawMaxPerFeed, { min: 1 });
+  if (maxPerFeedResult.error) {
+    return res.status(400).json({
+      error: "invalid_maxPerFeed",
+      message: "maxPerFeed must be a positive integer",
+    });
+  }
 
   try {
     const result = await fetchRssTopics({
       feedUrls,
-      maxPerFeed: Number.isInteger(maxPerFeed) ? Math.max(1, maxPerFeed) : undefined,
+      maxPerFeed: Number.isInteger(maxPerFeedResult.value)
+        ? maxPerFeedResult.value
+        : undefined,
     });
 
     return res.status(200).json({
       date: result.date,
       top: Array.isArray(result.top)
-        ? result.top.slice(0, Number.isInteger(topLimit) ? Math.max(1, topLimit) : 10)
+        ? result.top.slice(0, Number.isInteger(limitResult.value) ? limitResult.value : 10)
         : [],
       topByCategory: result.topByCategory,
       all: debug === "1" || debug === "true" ? result.all : undefined,
