@@ -5,10 +5,11 @@
 //
 // Simple connecteur RSS -> extraction de mots / scoring / catégorisation.
 // Contient une variable DEFAULT_FEEDS listant des flux prêts à l'emploi.
-// Usage : const { fetchRssTopics } = require('./scripts/rss-topics.js'); await fetchRssTopics();
+// Usage : import { fetchRssTopics } from './scripts/rss-topics.js'; await fetchRssTopics();
 
-const RSSParser = require('rss-parser');
-const _ = require('lodash');
+import RSSParser from 'rss-parser';
+import _ from 'lodash';
+import { fileURLToPath } from 'url';
 
 const DEFAULT_FEEDS = [
   "https://www.lemonde.fr/rss/une.xml",
@@ -71,7 +72,6 @@ async function fetchFeedItems(url, maxPerFeed){
 
 async function fetchRssTopics({ feedUrls = DEFAULT_FEEDS, maxPerFeed = 20 } = {}){
   const candidates = {};
-  const sourcesMap = {};
 
   for(const url of feedUrls){
     if(!url) continue;
@@ -102,12 +102,10 @@ async function fetchRssTopics({ feedUrls = DEFAULT_FEEDS, maxPerFeed = 20 } = {}
 
   // topByCategory heuristic
   const topByCategory = { politique: null, people: null, cinema: null, absurde: null, geo: null };
-  const assigned = {};
 
   for(const item of sorted){
     const cat = assignCategory(item.keyword);
     if(!topByCategory[cat]) topByCategory[cat] = item.keyword;
-    assigned[item.keyword] = cat;
   }
 
   const result = {
@@ -121,7 +119,8 @@ async function fetchRssTopics({ feedUrls = DEFAULT_FEEDS, maxPerFeed = 20 } = {}
 }
 
 // CLI runner
-if (require.main === module) {
+const __filename = fileURLToPath(import.meta.url);
+if (process.argv[1] === __filename) {
   (async () => {
     try{
       const res = await fetchRssTopics({});
@@ -133,5 +132,5 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { fetchRssTopics };
+export { fetchRssTopics };
 
