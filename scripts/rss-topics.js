@@ -1,47 +1,43 @@
-// Dépendances à installer (si non déjà présentes) :
-// npm install rss-parser lodash
-//
-// scripts/rss-topics.js
-//
-// Simple connecteur RSS -> extraction de mots / scoring / catégorisation.
-// Contient une variable DEFAULT_FEEDS listant des flux prêts à l'emploi.
-// Usage : import { fetchRssTopics } from './scripts/rss-topics.js'; await fetchRssTopics();
+/*
+ scripts/rss-topics.js
+ Dépendances : rss-parser, lodash, node-fetch@2
+ Installer si nécessaire : npm install rss-parser lodash node-fetch@2
 
-import RSSParser from 'rss-parser';
-import _ from 'lodash';
-import { fileURLToPath } from 'url';
+ Ce fichier :
+ - fetch chaque RSS via node-fetch avec User-Agent pour éviter les blocages
+ - parse le XML avec rss-parser.parseString()
+ - journalise erreurs / status / nombre d'items / durée
+ - retourne le JSON final (date, top, topByCategory)
+*/
+
+const Parser = require('rss-parser');
+const parser = new Parser();
+const _ = require('lodash');
+const fetch = require('node-fetch'); // version 2.x
 
 const DEFAULT_FEEDS = [
+  "https://feeds.bbci.co.uk/news/rss.xml",
+  "https://www.reuters.com/rssFeed/topNews",
+  "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
   "https://www.lemonde.fr/rss/une.xml",
   "https://www.lefigaro.fr/rss/figaro_actualites.xml",
-  "https://www.liberation.fr/rss/latest/",
-  "https://www.leparisien.fr/une/feed/",
-  "https://www.reuters.com/rssFeed/topNews",
   "https://www.france24.com/fr/rss",
-  "https://feeds.bbci.co.uk/news/rss.xml",
-  "https://www.euronews.com/rss?level=themes",
-  "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
   "https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr"
 ];
 
-const parser = new RSSParser({ timeout: 15000 });
-
 const STOPWORDS = new Set([
-  "les","des","les","pour","avec","dans","sur","par","une","un","le","la","et","du","de","que","qui","en","au","aux","ce","ces","se","son","sa","sont"
+  "les","des","pour","avec","dans","sur","par","une","un","le","la","et","du","de","que","qui","en","au","aux","ce","ces","se","son","sa","sont","est","à","vous","nous"
 ]);
 
 function norm(s){
-  return s.replace(/[^\p{L}\p{N}#\s'-]/gu, '').trim();
+  return (s||'').replace(/[^\p{L}\p{N}#\s'-]/gu, '').trim();
 }
 
 function extractCandidates(text){
   if(!text) return [];
-  // hashtags
-  const hashes = [...text.matchAll(/#\w+/g)].map(m=>m[0]);
-  // capitalized sequences for names (heuristic)
-  const caps = [...text.matchAll(/([A-ZÀ-ÖØ-Ý][\p{L}'-]+(?:\s+[A-ZÀ-ÖØ-Ý][\p{L}'-]+)*)/gu)].map(m=>m[1]);
-  // words > 3 letters
-  const words = [...text.matchAll(/\b[^\d\W_]{4,}\b/gu)].map(m=>m[0]);
+  const hashes = [...(text.matchAll(/#\w+/g) || [])].map(m=>m[0]);
+  const caps = [...(text.matchAll(/([A-ZÀ-ÖØ-Ý][\p{L}'-]+(?:\s+[A-ZÀ-ÖØ-Ý][\p{L}'-]+)*)/gu) || [])].map(m=>m[1]);
+  const words = [...(text.matchAll(/\b[^\d\W_]{4,}\b/gu) || [])].map(m=>m[0]);
   return [...hashes, ...caps, ...words].map(t=>norm(t)).filter(Boolean);
 }
 
@@ -50,35 +46,62 @@ function isLikelyPerson(token){
 }
 
 function assignCategory(keyword){
-  const low = keyword.toLowerCase();
+  const low = (keyword||'').toLowerCase();
   if (isLikelyPerson(keyword)) return 'people';
-  if (/\b(president|président|ministre|gouvern|élection|déput|senat|macron|villepin|hollande|le pen|lepen)\b/i.test(low)) return 'politique';
-  if (/\b(film|cinema|festival|palme|cannes|réalisateur|acteur|actrice)\b/i.test(low)) return 'cinema';
-  if (/\b(paris|london|moscou|beijing|seoul|usa|france|russia|china|uk|onu)\b/i.test(low)) return 'geo';
+  if (/\b(president|président|ministre|gouvern|élection|déput|senat|macron|villepin|le pen|assad|biden|trump)\b/i.test(low)) return 'politique';
+  if (/\b(film|cinema|festival|palme|cannes|réalisateur|acteur|actrice|oscar)\b/i.test(low)) return 'cinema';
+  if (/\b(paris|london|moscou|beijing|seoul|usa|france|russia|china|uk|onu|ukraine)\b/i.test(low)) return 'geo';
   if (low.length<=4) return 'absurde';
   return 'absurde';
 }
 
-async function fetchFeedItems(url, maxPerFeed){
+async function fetchRaw(url, timeoutMs = 15000){
+  const start = Date.now();
   try{
-    const feed = await parser.parseURL(url);
-    const items = (feed.items || []).slice(0, maxPerFeed);
-    return items.map(i => ({ title: i.title||'', content: (i.contentSnippet||i.content||i.summary||'') }));
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RSS-Topic-Bot/1.0)' },
+      timeout: timeoutMs
+    });
+    const text = await res.text();
+    const took = Date.now() - start;
+    return { ok: true, status: res.status, text, took };
+  }catch(err){
+    const took = Date.now() - start;
+    return { ok: false, error: String(err), took };
+  }
+}
+
+async function fetchFeedItems(url, maxPerFeed = 20){
+  const debug = { url, startedAt: new Date().toISOString() };
+  const raw = await fetchRaw(url);
+  debug.raw = { ok: raw.ok, status: raw.status, tookMs: raw.took, err: raw.error ? raw.error : undefined, length: raw.text ? raw.text.length : 0 };
+  if(!raw.ok) {
+    console.error('FETCH ERROR', url, raw.error);
+    return { items: [], debug };
+  }
+  try{
+    const feed = await parser.parseString(raw.text);
+    const items = (feed.items || []).slice(0, maxPerFeed).map(i=>({ title: i.title||'', content: (i.contentSnippet||i.content||i.summary||'') }));
+    debug.parsedCount = items.length;
+    return { items, debug };
   }catch(e){
-    // silent fallback, return empty list
-    return [];
+    console.error('PARSE ERROR', url, e && e.message);
+    debug.parseError = e && e.message;
+    return { items: [], debug };
   }
 }
 
 async function fetchRssTopics({ feedUrls = DEFAULT_FEEDS, maxPerFeed = 20 } = {}){
   const candidates = {};
+  const feedDebug = [];
 
   for(const url of feedUrls){
     if(!url) continue;
-    const items = await fetchFeedItems(url, maxPerFeed);
+    const { items, debug } = await fetchFeedItems(url, maxPerFeed);
+    feedDebug.push(debug);
     for(const it of items){
-      const combined = `${it.title} ${it.content}`.replace(/\s+/g,' ');
-      const tokens = extractCandidates(combined);
+      const text = `${it.title} ${it.content}`.replace(/\s+/g,' ');
+      const tokens = extractCandidates(text);
       for(const t of tokens){
         const normalized = t.toLowerCase();
         if(STOPWORDS.has(normalized)) continue;
@@ -89,7 +112,6 @@ async function fetchRssTopics({ feedUrls = DEFAULT_FEEDS, maxPerFeed = 20 } = {}
     }
   }
 
-  // build list
   const list = Object.values(candidates).map(o => ({
     keyword: o.keyword,
     normalized: o.normalized,
@@ -100,37 +122,32 @@ async function fetchRssTopics({ feedUrls = DEFAULT_FEEDS, maxPerFeed = 20 } = {}
 
   const sorted = _.orderBy(list, ['score','occurrences'], ['desc','desc']).slice(0, 200);
 
-  // topByCategory heuristic
   const topByCategory = { politique: null, people: null, cinema: null, absurde: null, geo: null };
-
   for(const item of sorted){
     const cat = assignCategory(item.keyword);
     if(!topByCategory[cat]) topByCategory[cat] = item.keyword;
   }
 
-  const result = {
+  return {
     date: new Date().toISOString().slice(0,10),
     all: sorted,
     top: sorted.slice(0,10),
-    topByCategory
+    topByCategory,
+    feedDebug
   };
-
-  return result;
 }
 
-// CLI runner
-const __filename = fileURLToPath(import.meta.url);
-if (process.argv[1] === __filename) {
+if (require.main === module) {
   (async () => {
     try{
+      console.log('START fetchRssTopics', new Date().toISOString());
       const res = await fetchRssTopics({});
       console.log(JSON.stringify(res, null, 2));
     }catch(e){
-      console.error(e);
+      console.error('FATAL', e && e.stack ? e.stack : e);
       process.exit(1);
     }
   })();
 }
 
-export { fetchRssTopics };
-
+module.exports = { fetchRssTopics };
