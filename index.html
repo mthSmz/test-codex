@@ -8,6 +8,6 @@
   const r=await fetch('/api/today'); const data=await r.json();
   if(!r.ok) throw new Error(data?.message||'not ready');
   date.textContent=data.date; poem.textContent=data.poem; tags.textContent='Hashtags: '+data.hashtags.join(' ');
-}catch(e){poem.textContent="Le poème du jour n'est pas encore prêt. Reviens plus tard.";}})
+  }catch(e){poem.textContent='Le poème sera publié à 15h (heure de Paris).'; tags.textContent='';}})
 ();
 </script></body></html>
