@@ -75,21 +75,43 @@ export default async function handler(req, res) {
 
     const existing = await redis.get(key);
     if (existing) {
-      const source =
-        typeof existing === "object" && existing !== null && existing.source
-          ? existing.source
-          : "openai";
+      let existingRecord = null;
+      if (typeof existing === "string") {
+        try {
+          existingRecord = JSON.parse(existing);
+        } catch (parseError) {
+          console.error(parseError);
+        }
+      } else if (existing && typeof existing === "object") {
+        existingRecord = existing;
+      }
+
+      if (existingRecord) {
+        await redis.set("poem:latest", existingRecord);
+        return res.status(200).json({
+          status: "exists",
+          source: existingRecord.source || "openai",
+          date,
+          hashtags: existingRecord.hashtags || HASHTAGS,
+          poem: existingRecord.poem || "",
+        });
+      }
+
       await redis.set("poem:latest", existing);
       return res.status(200).json({
         status: "exists",
-        source,
         date,
+        source: "openai",
+        hashtags: HASHTAGS,
+        poem: "",
       });
     }
 
+    let source = "openai";
     let record;
 
     if (!process.env.OPENAI_API_KEY) {
+      source = "mock";
       record = buildMockRecord(date);
     } else {
       const { default: OpenAI } = await import("openai");
@@ -114,21 +136,21 @@ export default async function handler(req, res) {
           hashtags: HASHTAGS,
           poem,
           generatedAt: new Date().toISOString(),
-          source: "openai",
+          source,
         };
       } catch (error) {
-        if (error?.status === 429 || error?.response?.status === 429) {
-          console.error(error);
-          record = buildMockRecord(date);
-        } else {
-          throw error;
-        }
+        console.error(error);
+        source = "mock";
+        record = buildMockRecord(date);
       }
     }
 
     if (!record) {
+      source = "mock";
       record = buildMockRecord(date);
     }
+
+    record.source = source;
 
     await redis.set(key, record);
     await redis.set("poem:latest", record);
@@ -137,9 +159,11 @@ export default async function handler(req, res) {
       status: "created",
       source: record.source,
       date,
+      hashtags: record.hashtags,
+      poem: record.poem,
     });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ error: "internal_error" });
+    return res.status(500).json({ error: "internal_error", message: err.message });
   }
 }
