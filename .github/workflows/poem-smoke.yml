@@ -1,0 +1,56 @@
+name: Poem Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HOST: daily-poem.vercel.app
+      FEED_A: https://www.lemonde.fr/rss/une.xml
+      FEED_B: https://www.lefigaro.fr/rss/figaro_actualites.xml
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: JSON default
+        run: |
+          URL="https://${HOST}/api/poem"
+          code=$(curl -sS -o out.json -w "%{http_code}" "$URL")
+          test "$code" = "200"
+          grep -q '"poem"' out.json
+          head -c 300 out.json || true
+
+      - name: TXT format
+        run: |
+          URL="https://${HOST}/api/poem?format=txt"
+          code=$(curl -sS -o out.txt -w "%{http_code}" "$URL")
+          test "$code" = "200"
+          grep -q "Hashtags" out.txt
+          head -n 15 out.txt || true
+
+      - name: Count bounds
+        run: |
+          for n in 1 8 999; do
+            URL="https://${HOST}/api/poem?count=$n"
+            code=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
+            test "$code" = "200"
+          done
+
+      - name: Feeds + limit
+        run: |
+          URL="https://${HOST}/api/poem?feeds=${FEED_A}&limit=6"
+          code=$(curl -sS -o out2.json -w "%{http_code}" "$URL")
+          test "$code" = "200"
+          grep -q '"poem"' out2.json
+
+      - name: Multi-feeds
+        run: |
+          URL="https://${HOST}/api/poem?feeds=${FEED_A},${FEED_B}&limit=4"
+          code=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
+          test "$code" = "200"
