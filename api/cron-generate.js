@@ -4,28 +4,19 @@ import { Redis } from "@upstash/redis";
 const redis = Redis.fromEnv();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-function getParisDate() {
-  const parisNow = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" })
-  );
-  const year = parisNow.getFullYear();
-  const month = String(parisNow.getMonth() + 1).padStart(2, "0");
-  const day = String(parisNow.getDate()).padStart(2, "0");
-  return { parisNow, key: `poem:${year}-${month}-${day}` };
+const HASHTAGS = ["#Paris", "#Amour", "#Pluie", "#Danse", "#Minuit"];
+
+function getTodayDate() {
+  return new Date().toISOString().split("T")[0];
 }
 
-async function getPlaceholderHashtags() {
-  return ["#aurore", "#macadam", "#fleuve", "#echo", "#velours"];
-}
-
-async function generatePoem(hashtags) {
-  const prompt = `
+function buildPrompt(hashtags) {
+  return `
 Écris un poème libre en français de 12 à 20 vers.
-Inspire-toi de ces mots du jour : ${hashtags.join(", ")}.
-Chaque mot ne doit pas être répété littéralement plus d'une fois.
-Sois évocateur et inventif, sans contrainte de rimes systématiques.
-`;
+Inspire-toi de ces mots du jour : ${hashtags.join(", ")}.`;
+}
 
+async function generatePoem(prompt) {
   const response = await openai.chat.completions.create({
     model: process.env.OPENAI_MODEL || "gpt-4o-mini",
     messages: [{ role: "user", content: prompt.trim() }],
@@ -36,30 +27,31 @@ Sois évocateur et inventif, sans contrainte de rimes systématiques.
 }
 
 export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).end("Method Not Allowed");
+  }
+
   const providedSecret = req.headers["x-cron-secret"];
+
   if (!process.env.CRON_SECRET || providedSecret !== process.env.CRON_SECRET) {
     return res.status(401).json({ error: "unauthorized" });
   }
 
-  const { parisNow, key } = getParisDate();
+  try {
+    const date = getTodayDate();
+    const prompt = buildPrompt(HASHTAGS);
+    const poem = await generatePoem(prompt);
 
-  const exists = await redis.exists(key);
-  if (exists) {
-    return res.status(200).json({ status: "exists" });
+    if (!poem) {
+      return res.status(502).json({ error: "failed_to_generate_poem" });
+    }
+
+    await redis.set(date, poem);
+
+    return res.status(200).json({ status: "ok", date, poem });
+  } catch (error) {
+    console.error("/api/cron-generate error", error);
+    return res.status(500).json({ error: "internal_error" });
   }
-
-  const hashtags = await getPlaceholderHashtags();
-  const poem = await generatePoem(hashtags);
-
-  const record = {
-    date: key.slice("poem:".length),
-    hashtags,
-    poem,
-    generatedAt: new Date().toISOString(),
-  };
-
-  await redis.set(key, record);
-  await redis.set("poem:latest", key);
-
-  return res.status(200).json({ status: "created", key });
 }
