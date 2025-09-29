@@ -10,6 +10,10 @@
       "destination": "/api/cron-generate.js"
     },
     {
+      "source": "/api/daily-rotate",
+      "destination": "/api/daily-rotate.js"
+    },
+    {
       "source": "/api/rss-topics",
       "destination": "/api/rss-topics.js"
     }
