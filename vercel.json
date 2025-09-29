@@ -1,7 +1,6 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/api/poem", "destination": "/api/today.js" },
     { "source": "/api/today", "destination": "/api/today.js" },
     { "source": "/api/cron-generate", "destination": "/api/cron-generate.js" },
     { "source": "/api/rss-topics", "destination": "/api/rss-topics.js" }
