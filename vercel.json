@@ -1,4 +1,11 @@
 {
   "cleanUrls": true,
-  "rewrites": [{ "source": "/api/poem", "destination": "/api/poem.js" }]
+  "rewrites": [
+    { "source": "/api/poem", "destination": "/api/today.js" },
+    { "source": "/api/today", "destination": "/api/today.js" },
+    { "source": "/api/cron-generate", "destination": "/api/cron-generate.js" }
+  ],
+  "crons": [
+    { "path": "/api/cron-generate", "schedule": "0 13 * * *" }
+  ]
 }

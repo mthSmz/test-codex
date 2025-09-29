@@ -4,13 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node api/poem.js",
     "format": "prettier -w ."
   },
   "dependencies": {
-    "openai": "^4.57.0"
+    "openai": "^4.57.0",
+    "@vercel/kv": "^1.0.1"
   },
-  "devDependencies": {
-    "prettier": "^3.3.3"
-  }
+  "devDependencies": { "prettier": "^3.3.3" }
 }
