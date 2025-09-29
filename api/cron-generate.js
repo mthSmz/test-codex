@@ -5,6 +5,11 @@ const redis = Redis.fromEnv();
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const HASHTAGS = ["#Paris", "#Amour", "#Pluie", "#Danse", "#Minuit"];
+const KEY_PREFIX = "poem:";
+
+function buildKey(date) {
+  return `${KEY_PREFIX}${date}`;
+}
 
 function getTodayDate() {
   return new Date().toISOString().split("T")[0];
@@ -47,7 +52,16 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: "failed_to_generate_poem" });
     }
 
-    await redis.set(date, poem);
+    const key = buildKey(date);
+    const payload = {
+      date,
+      hashtags: HASHTAGS,
+      poem,
+      generatedAt: new Date().toISOString(),
+    };
+
+    await redis.set(key, payload);
+    await redis.set(`${KEY_PREFIX}latest`, key);
 
     return res.status(200).json({ status: "ok", date, poem });
   } catch (error) {
