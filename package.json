@@ -1,6 +1,16 @@
 {
-  "name": "test-codex",
+  "name": "daily-poem",
   "version": "1.0.0",
-  "main": "index.js",
-  "license": "MIT"
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node api/poem.js",
+    "format": "prettier -w ."
+  },
+  "dependencies": {
+    "openai": "^4.57.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
 }
