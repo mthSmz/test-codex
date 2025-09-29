@@ -41,19 +41,23 @@ export default async function handler(req, res) {
     ? feeds.split(",").map((item) => item.trim()).filter(Boolean)
     : undefined;
 
-  const limitResult = normalizeQueryInteger(limit, { defaultValue: 10, min: 1 });
+  const limitResult = normalizeQueryInteger(limit, {
+    defaultValue: 10,
+    min: 1,
+    max: 100,
+  });
   if (limitResult.error) {
     return res.status(400).json({
-      error: "invalid_limit",
-      message: "limit must be a positive integer",
+      error: limitResult.error,
+      parameter: "limit",
     });
   }
 
   const maxPerFeedResult = normalizeQueryInteger(rawMaxPerFeed, { min: 1 });
   if (maxPerFeedResult.error) {
     return res.status(400).json({
-      error: "invalid_maxPerFeed",
-      message: "maxPerFeed must be a positive integer",
+      error: maxPerFeedResult.error,
+      parameter: "maxPerFeed",
     });
   }
 
