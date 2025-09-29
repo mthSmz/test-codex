@@ -1,14 +1,38 @@
-import { kv } from "@vercel/kv";
+import { Redis } from "@upstash/redis";
+
+const redis = Redis.fromEnv();
+
+function getParisDateKey() {
+  const date = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Paris",
+  }).format(new Date());
+  return `poem:${date}`;
+}
 
 export default async function handler(req, res) {
-  const parisNow = new Date().toLocaleString("en-US", { timeZone: "Europe/Paris" });
-  const d = new Date(parisNow);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const key = `poem:${yyyy}-${mm}-${dd}`;
+  const todayKey = getParisDateKey();
 
-  const record = await kv.get(key);
-  if (!record) return res.status(404).json({ error: "not_ready", message: "Poème pas encore généré aujourd’hui." });
-  res.status(200).json(record);
+  let record = await redis.get(todayKey);
+
+  if (!record) {
+    const latestKey = await redis.get("poem:latest");
+
+    if (typeof latestKey === "string" && latestKey) {
+      record = await redis.get(latestKey);
+    }
+  }
+
+  if (!record) {
+    return res.status(404).json({ error: "not_ready" });
+  }
+
+  const { date, hashtags, poem, generatedAt } = record;
+
+  return res.status(200).json({
+    date,
+    hashtags,
+    poem,
+    generatedAt,
+    note: `Poème du ${date ?? todayKey.slice("poem:".length)} (affiché jusqu’à la prochaine génération)`
+  });
 }
