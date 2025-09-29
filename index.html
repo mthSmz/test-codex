@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Poème du jour — #tendances</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>Poème du jour</h1>
+    <p class="date" id="date"></p>
+    <pre id="poem">Chargement…</pre>
+    <p class="hashtags" id="tags"></p>
+  </main>
+  <script>
+  (async () => {
+    const r = await fetch('/api/poem');
+    const data = await r.json();
+    document.getElementById('date').textContent = data.date;
+    document.getElementById('poem').textContent = data.poem;
+    document.getElementById('tags').textContent = 'Hashtags: ' + data.hashtags.join(' ');
+  })();
+  </script>
+</body>
+</html>
