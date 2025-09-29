@@ -3,6 +3,7 @@
  * Params facultatifs (pass-through vers /api/rss-topics) : feeds, limit, maxPerFeed, debug
  * Params propres : count (nb de mots, défaut 5, min 1 max 8), format=txt|json
  */
+import { fetchRssTopics } from "../scripts/rss-topics.js";
 function pickProtocol(req) {
   const xf = (req.headers["x-forwarded-proto"] || "").toString().split(",")[0].trim();
   return xf === "http" || xf === "https" ? xf : "https";
@@ -11,6 +12,56 @@ function pickProtocol(req) {
 function toArray(x) {
   if (x === undefined || x === null) return [];
   return Array.isArray(x) ? x : [x];
+}
+
+function parseIntegerParam(value, { min, max }) {
+  if (value === undefined || value === null) {
+    return { ok: true, value: undefined };
+  }
+
+  const raw = Array.isArray(value) ? value[value.length - 1] : value;
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return { ok: false, reason: "invalid_type" };
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed)) {
+    return { ok: false, reason: "invalid_integer" };
+  }
+
+  if (typeof min === "number" && parsed < min) {
+    return { ok: false, reason: "out_of_range" };
+  }
+
+  if (typeof max === "number" && parsed > max) {
+    return { ok: false, reason: "out_of_range" };
+  }
+
+  return { ok: true, value: parsed };
+}
+
+function parseFeedUrls(rawFeeds) {
+  const values = toArray(rawFeeds)
+    .flatMap((entry) =>
+      typeof entry === "string"
+        ? entry
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean)
+        : []
+    );
+
+  if (!values.length) return undefined;
+
+  const seen = new Set();
+  const out = [];
+  for (const value of values) {
+    if (!seen.has(value)) {
+      seen.add(value);
+      out.push(value);
+    }
+  }
+  return out.length ? out : undefined;
 }
 
 function normCount(q) {
@@ -85,14 +136,32 @@ export default async function handler(req, res) {
     }
     const topicsUrl = `${baseUrl}${forwardParams.toString() ? "?" + forwardParams.toString() : ""}`;
 
-    const resp = await fetch(topicsUrl, { method: "GET" });
-    if (!resp.ok) {
-      const body = await resp.text();
-      return res.status(502).json({ status: "bad_gateway", message: "rss_topics_failed", upstream: resp.status, body });
+    const limitResult = parseIntegerParam(query.limit, { min: 1, max: 100 });
+    if (!limitResult.ok) {
+      return res.status(400).json({ status: "bad_request", parameter: "limit", reason: limitResult.reason });
     }
-    const data = await resp.json();
 
-    const fromTop = Array.isArray(data.top) ? data.top : [];
+    const maxPerFeedResult = parseIntegerParam(query.maxPerFeed, { min: 1 });
+    if (!maxPerFeedResult.ok) {
+      return res.status(400).json({ status: "bad_request", parameter: "maxPerFeed", reason: maxPerFeedResult.reason });
+    }
+
+    const feedUrls = parseFeedUrls(query.feeds);
+    const limit = Number.isInteger(limitResult.value) ? limitResult.value : 10;
+    const maxPerFeed = Number.isInteger(maxPerFeedResult.value) ? maxPerFeedResult.value : undefined;
+
+    let data;
+    try {
+      data = await fetchRssTopics({
+        feedUrls,
+        maxPerFeed,
+      });
+    } catch (error) {
+      console.error("/api/poem rss-topics failure", error);
+      data = null;
+    }
+
+    const fromTop = Array.isArray(data?.top) ? data.top.slice(0, limit) : [];
     // Chaque item attendu sous forme { keyword, ... }
     const words = dedupePreserveOrder(
       fromTop.map((t) => (t && (t.keyword || t.normalized || t.key || t.term) || "")).filter(Boolean)
@@ -110,10 +179,10 @@ export default async function handler(req, res) {
     }
     return res.status(200).json({
       status: "ok",
-      date: data.date || new Date().toISOString().slice(0, 10),
+      date: data?.date || new Date().toISOString().slice(0, 10),
       words,
       poem,
-      source: "rss-topics",
+      source: data ? "rss-topics" : "fallback",
       url: topicsUrl
     });
   } catch (err) {
