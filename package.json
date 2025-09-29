@@ -8,7 +8,8 @@
   },
   "dependencies": {
     "openai": "^4.57.0",
-    "@vercel/kv": "^1.0.1"
+    "@vercel/kv": "^1.0.1",
+    "@upstash/redis": "^1.29.4"
   },
   "devDependencies": { "prettier": "^3.3.3" }
 }
