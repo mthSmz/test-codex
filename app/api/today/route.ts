@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
 
+export const runtime = "edge";
+
+type PoemRecord = { title: unknown; poem: unknown };
+
 const INAUGURAL_POEM = {
   title: "Poème inaugural",
   poem: `Une cigarette rougeoyait dans le soir
@@ -10,25 +14,28 @@ Sous un parfum de nullitude
 Et tout s’achevait dans une flaque de ketchup.`
 };
 
-type PoemRecord = { title: unknown; poem: unknown };
-
-function isValidPoem(value: unknown): value is { title: string; poem: string } {
-  if (!value || typeof value !== "object") return false;
-  const record = value as PoemRecord;
-  return typeof record.title === "string" && typeof record.poem === "string";
-}
-
 export async function GET() {
   const today = new Date().toISOString().split("T")[0];
 
+  let poem: PoemRecord | null = null;
   try {
-    const stored = await kv.get(`poem:${today}`);
-    if (isValidPoem(stored)) {
-      return NextResponse.json(stored);
-    }
-  } catch (error) {
-    console.error("Failed to load poem from KV", error);
+    poem = (await kv.get(`poem:${today}`)) as PoemRecord | null;
+  } catch (e) {
+    // log et on retombe sur le fallback
+    console.error("KV get error", e);
   }
 
-  return NextResponse.json(INAUGURAL_POEM);
+  // Validation de forme minimale
+  if (!poem || typeof poem.title !== "string" || typeof poem.poem !== "string") {
+    poem = INAUGURAL_POEM;
+  }
+
+  return NextResponse.json(poem, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      "Pragma": "no-cache",
+      "Expires": "0"
+    }
+  });
 }
