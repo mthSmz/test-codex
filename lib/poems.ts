@@ -1,112 +1,76 @@
-import { Redis } from "@upstash/redis";
+import { kv } from "@vercel/kv";
 
-const redis = Redis.fromEnv();
+export type NormalizedPoem = { html: string; publishedAt: string };
 
-const POEM_KEY_PREFIX = "poem:";
+function normalizePoem(value: unknown): NormalizedPoem | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const htmlValue = record.html;
+  const publishedAtValue = record.publishedAt;
 
-export interface RawPoemRecord {
-  html?: unknown;
-  poem?: unknown;
-  publishedAt?: unknown;
-  date?: unknown;
-  generatedAt?: unknown;
-  [key: string]: unknown;
-}
-
-export interface NormalizedPoem {
-  html: string;
-  publishedAt: string;
-  generatedAt?: string;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-function poemTextToHtml(poem: string): string {
-  const lines = poem.split(/\r?\n/);
-  const htmlLines = lines.map((line) => {
-    const content = escapeHtml(line.trimEnd());
-    return content ? `<p>${content}</p>` : "<p>&nbsp;</p>";
-  });
-  return htmlLines.join("");
-}
-
-function extractHtml(record: RawPoemRecord): string | null {
-  if (typeof record.html === "string" && record.html.trim()) {
-    return record.html;
-  }
-
-  if (typeof record.poem === "string" && record.poem.trim()) {
-    return poemTextToHtml(record.poem);
-  }
-
-  return null;
-}
-
-function extractPublishedAt(record: RawPoemRecord): string | null {
-  const value =
-    typeof record.publishedAt === "string" && record.publishedAt.trim()
-      ? record.publishedAt
-      : typeof record.date === "string" && record.date.trim()
-      ? record.date
-      : null;
-
-  if (!value) {
+  if (htmlValue == null || publishedAtValue == null) {
     return null;
   }
 
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return value;
-}
-
-export async function getAllPoems(): Promise<RawPoemRecord[]> {
-  const poems: RawPoemRecord[] = [];
-
-  for await (const key of redis.scanIterator({ match: `${POEM_KEY_PREFIX}*` })) {
-    if (typeof key !== "string") continue;
-
-    const record = await redis.get<unknown>(key);
-    if (!record) continue;
-
-    if (typeof record === "string") {
-      try {
-        const parsed = JSON.parse(record) as RawPoemRecord;
-        poems.push(parsed);
-        continue;
-      } catch (error) {
-        console.warn("Ignoring invalid JSON for", key, error);
-        continue;
-      }
-    }
-
-    if (typeof record === "object") {
-      poems.push(record as RawPoemRecord);
-    }
-  }
-
-  return poems;
-}
-
-export function normalisePoem(record: RawPoemRecord): NormalizedPoem | null {
-  const html = extractHtml(record);
-  const publishedAt = extractPublishedAt(record);
+  const html = String(htmlValue).trim();
+  const publishedAt = String(publishedAtValue).trim();
 
   if (!html || !publishedAt) {
     return null;
   }
 
-  const generatedAt =
-    typeof record.generatedAt === "string" ? record.generatedAt : undefined;
+  const parsed = new Date(publishedAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
 
-  return { html, publishedAt, generatedAt };
+  return { html, publishedAt };
+}
+
+export async function getAllPoems(): Promise<NormalizedPoem[]> {
+  const out: NormalizedPoem[] = [];
+
+  const list = await kv.get("poems");
+  if (Array.isArray(list)) {
+    for (const p of list) {
+      const normalized = normalizePoem(p);
+      if (normalized) {
+        out.push(normalized);
+      }
+    }
+  }
+
+  for await (const key of kv.scanIterator({ match: "poem:*" })) {
+    if (typeof key !== "string") continue;
+    const raw = await kv.get(key);
+    let parsed: unknown = raw;
+
+    if (typeof raw === "string") {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        parsed = null;
+      }
+    }
+
+    const normalized = normalizePoem(parsed);
+    if (normalized) {
+      out.push(normalized);
+    }
+  }
+
+  out.sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : a.publishedAt > b.publishedAt ? -1 : 0));
+  return out;
+}
+
+export async function getLatestPoemBefore(now: Date): Promise<NormalizedPoem | null> {
+  const all = await getAllPoems();
+  if (all.length === 0) return null;
+
+  const past = all.filter((poem) => {
+    const publishedAt = new Date(poem.publishedAt);
+    return !Number.isNaN(publishedAt.getTime()) && publishedAt <= now;
+  });
+
+  return past[0] ?? all[0] ?? null;
 }
