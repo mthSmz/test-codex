@@ -2,5 +2,7 @@
 .wrap { max-width: 720px; margin: 6rem auto; padding: 0 1rem; }
 h1 { font-size: clamp(2rem, 3vw, 3rem); margin: 0 0 0.5rem; }
 .date { opacity:.7; margin: 0 0 2rem; }
+.notice { margin: 0 0 1.5rem; font-style: italic; opacity:.75; }
+.notice.hidden { display: none; }
 pre { white-space: pre-wrap; line-height: 1.6; font-size: 1.15rem; }
 .hashtags { margin-top: 1rem; opacity:.8; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
