@@ -8,13 +8,11 @@ export async function GET() {
   if (!poem) {
     poem = {
       title: "Poème inaugural",
-      poem: [
-        "Une cigarette rougeoyait dans le soir",
-        "La sauterelle bondissait d’un mot à l’autre",
-        "Un porte-avion traversait la mémoire",
-        "Sous un parfum de nullitude",
-        "Et tout s’achevait dans une flaque de ketchup."
-      ].join("\n")
+      poem: `Une cigarette rougeoyait dans le soir
+La sauterelle bondissait d’un mot à l’autre
+Un porte-avion traversait la mémoire
+Sous un parfum de nullitude
+Et tout s’achevait dans une flaque de ketchup.`
     };
   }
 
