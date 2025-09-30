@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
-import { fetchRssFeeds } from "@/lib/fetchRss";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -11,17 +10,13 @@ export async function GET(req: Request) {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const rss = await fetchRssFeeds();
-  const headlines = rss.map(x => `• ${x.title}${x.description ? " — " + x.description : ""}`).join("\n");
-
   const prompt = `Écris un poème contemporain en français, daté ${today}.
-Intègre librement des échos aux titres du jour :
-${headlines}
-
-Contrainte :
+Contraintes :
+- Utilise obligatoirement ces mots : cigarette, sauterelle, porte-avion, "parfum de nullitude", ketchup.
 - 12 à 20 vers libres
 - une métaphore filée
 - une dernière ligne ironique
+
 Réponds en JSON: {"title":"...","poem":"lignes séparées par \\n"}`;
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
