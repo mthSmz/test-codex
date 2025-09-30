@@ -18,6 +18,26 @@
       "destination": "/api/rss-topics.js"
     }
   ],
+  "headers": [
+    {
+      "source": "/",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/api/poems/latest",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ],
   "crons": [
     {
       "path": "/api/daily-rotate",
