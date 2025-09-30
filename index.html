@@ -10,7 +10,7 @@
 </main><script>
 (function(){
   const STORAGE_KEY='poeme-du-jour:last';
-  const WAITING_MESSAGE='Le poème sera publié à 15h (heure de Paris).';
+  const EMPTY_MESSAGE='Pas encore de poème disponible.';
 
   const dateEl=document.getElementById('date');
   const poemEl=document.getElementById('poem');
@@ -41,7 +41,7 @@
   function renderPoem(data,source){
     const hashtags=normaliseHashtags(data.hashtags);
     dateEl.textContent=typeof data.date==='string'?data.date:'';
-    poemEl.textContent=typeof data.poem==='string'?data.poem:WAITING_MESSAGE;
+    poemEl.textContent=typeof data.poem==='string'?data.poem:EMPTY_MESSAGE;
     tagsEl.textContent=hashtags.length?'Hashtags: '+hashtags.join(' '):'';
 
     const noteRaw=typeof data.note==='string'?data.note:'';
@@ -101,7 +101,7 @@
       if(cachedPoem){
         showStatus('Poème précédent affiché en attendant la nouvelle publication.');
       }else{
-        poemEl.textContent=WAITING_MESSAGE;
+        poemEl.textContent=EMPTY_MESSAGE;
         tagsEl.textContent='';
         showStatus('');
       }
