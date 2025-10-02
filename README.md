@@ -50,3 +50,6 @@ Le fichier `vercel.json` déclare un cron Vercel appelant `/api/cron/generate` c
 1. Installez les dépendances : `npm install`.
 2. Démarrez le serveur : `npm run dev`.
 3. Définissez des variables KV locales (Upstash/Vercel KV) pour tester la persistance.
+
+
+🚀 Trigger redeploy at Thu Oct  2 11:12:05 UTC 2025
