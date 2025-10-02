@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { kv } from '@vercel/kv';
+import { utcToZonedTime, format } from 'date-fns-tz';
 
 import { CITIES_FR } from './cities-fr';
 
@@ -128,6 +129,26 @@ export async function getUsedCities(): Promise<Set<string>> {
 export async function setUsedCities(set: Set<string>): Promise<void> {
   const sorted = Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
   await kv.set('cities:used', sorted);
+}
+
+export function parisDateId(d: Date): string {
+  const paris = utcToZonedTime(d, 'Europe/Paris');
+  return format(paris, 'yyyy-MM-dd', { timeZone: 'Europe/Paris' });
+}
+
+export async function poemExistsForParisDate(parisDateYYYYMMDD: string): Promise<boolean> {
+  const list = parseArrayLike(await kv.get('poems'));
+
+  for (const entry of list) {
+    const poem = normalizePoem(entry);
+    if (!poem) continue;
+    const id = parisDateId(new Date(poem.publishedAt));
+    if (id === parisDateYYYYMMDD) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function pickRandom<T>(arr: T[]): T {
