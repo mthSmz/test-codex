@@ -53,3 +53,6 @@ Le fichier `vercel.json` déclare un cron Vercel appelant `/api/cron/generate` c
 
 
 🚀 Trigger redeploy at Thu Oct  2 11:12:05 UTC 2025
+
+
+✅ Reset Vercel config at 2025-10-02T12:14:19Z
