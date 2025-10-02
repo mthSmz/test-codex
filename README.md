@@ -59,3 +59,5 @@ Le fichier `vercel.json` déclare un cron Vercel appelant `/api/cron/generate` c
 
 
 ✅ Added /api/health and /api/manual-generate at 2025-10-02T12:22:00Z
+
+✅ fix 404: add app/layout.tsx + SSR home 2025-10-02T12:51:08Z
