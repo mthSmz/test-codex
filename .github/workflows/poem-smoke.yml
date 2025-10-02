@@ -54,3 +54,9 @@ jobs:
           URL="https://${HOST}/api/manual-generate?visible=1&feeds=${FEED_A},${FEED_B}&limit=4"
           code=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
           test "$code" = "200"
+
+      - name: Latest poem available
+        run: |
+          URL="https://${HOST}/api/poems/latest"
+          code=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
+          test "$code" = "200"
