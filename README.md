@@ -23,6 +23,11 @@ Assurez-vous de configurer Vercel KV (intégration native ou variables suivantes
 2. Configurez l'intégration **Vercel KV** ou définissez les variables d'environnement listées ci-dessus.
 3. Poussez vos changements sur la branche `main` pour déclencher un déploiement.
 
+### Paramètres Vercel
+
+- Vercel Settings → Build & Output: **ne définissez pas** de champ "Output Directory". Laissez le `vercel.json` du dépôt piloter le build.
+- Si un override "Output Directory" est activé dans le tableau de bord, désactivez-le ou laissez le champ vide.
+
 ## Cron
 
 Le fichier `vercel.json` déclare un cron Vercel appelant `/api/cron/generate` chaque jour à 15:00 (Europe/Paris).
