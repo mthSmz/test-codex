@@ -1,5 +1,5 @@
 {
   "crons": [
-    { "path": "/api/cron/generate", "schedule": "0 15 * * *", "timeZone": "Europe/Paris" }
+    { "path": "/api/cron/generate", "schedule": "10 0 * * *" }
   ]
 }
