@@ -20,7 +20,7 @@ jobs:
 
       - name: JSON default
         run: |
-          URL="https://${HOST}/api/poem"
+          URL="https://${HOST}/api/manual-generate?visible=1"
           code=$(curl -sS -o out.json -w "%{http_code}" "$URL")
           test "$code" = "200"
           grep -q '"poem"' out.json
@@ -28,7 +28,7 @@ jobs:
 
       - name: TXT format
         run: |
-          URL="https://${HOST}/api/poem?format=txt"
+          URL="https://${HOST}/api/manual-generate?visible=1&format=txt"
           code=$(curl -sS -o out.txt -w "%{http_code}" "$URL")
           test "$code" = "200"
           grep -q "Hashtags" out.txt
@@ -37,20 +37,20 @@ jobs:
       - name: Count bounds
         run: |
           for n in 1 8 999; do
-            URL="https://${HOST}/api/poem?count=$n"
+            URL="https://${HOST}/api/manual-generate?visible=1&count=$n"
             code=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
             test "$code" = "200"
           done
 
       - name: Feeds + limit
         run: |
-          URL="https://${HOST}/api/poem?feeds=${FEED_A}&limit=6"
+          URL="https://${HOST}/api/manual-generate?visible=1&feeds=${FEED_A}&limit=6"
           code=$(curl -sS -o out2.json -w "%{http_code}" "$URL")
           test "$code" = "200"
           grep -q '"poem"' out2.json
 
       - name: Multi-feeds
         run: |
-          URL="https://${HOST}/api/poem?feeds=${FEED_A},${FEED_B}&limit=4"
+          URL="https://${HOST}/api/manual-generate?visible=1&feeds=${FEED_A},${FEED_B}&limit=4"
           code=$(curl -sS -o /dev/null -w "%{http_code}" "$URL")
           test "$code" = "200"
