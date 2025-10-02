@@ -23,7 +23,10 @@ export async function GET(req: Request) {
     const dayId = parisDateId(parisNow);
 
     if (!force && (await poemExistsForParisDate(dayId))) {
-      return NextResponse.json({ ok: true, skipped: true });
+      return NextResponse.json(
+        { ok: true, skipped: true, reason: "already generated today" },
+        { headers: { "Cache-Control": "no-store" } }
+      );
     }
 
     let publishedAt: string;
@@ -42,19 +45,23 @@ export async function GET(req: Request) {
 
     const city = forcedCity && forcedCity.length > 0 ? forcedCity : await pickCity();
     const html = await createPoemHTML(city);
-
     const poem = {
       id: crypto.randomUUID(),
       city,
       html,
       publishedAt,
     };
-
     await savePoem(poem);
 
-    return NextResponse.json({ ok: true, poem });
+    return NextResponse.json(
+      { ok: true, created: poem },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   } catch (err) {
     console.error("[manual-generate] error:", err);
-    return NextResponse.json({ ok: false, error: "internal" }, { status: 200 });
+    return NextResponse.json(
+      { ok: false, error: "internal_error" },
+      { status: 200, headers: { "Cache-Control": "no-store" } }
+    );
   }
 }

@@ -10,6 +10,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           background: '#0a0a0a',
           color: '#eee',
           fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+          lineHeight: 1.5,
         }}
       >
         {children}
