@@ -63,3 +63,5 @@ Le fichier `vercel.json` déclare un cron Vercel appelant `/api/cron/generate` c
 ✅ fix 404: add app/layout.tsx + SSR home 2025-10-02T12:51:08Z
 
 ✅ repair: layout/page/api written 2025-10-02T12:59:04Z
+
+🔧 enforce Next.js preset via .vercel/project.json @ 2025-10-02T13:07:35Z
