@@ -56,3 +56,6 @@ Le fichier `vercel.json` déclare un cron Vercel appelant `/api/cron/generate` c
 
 
 ✅ Reset Vercel config at 2025-10-02T12:14:19Z
+
+
+✅ Added /api/health and /api/manual-generate at 2025-10-02T12:22:00Z
