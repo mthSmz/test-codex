@@ -40,8 +40,7 @@ export async function GET(req: Request) {
       });
     }
 
-    const city =
-      forcedCity && forcedCity.length > 0 ? forcedCity : await pickCity();
+    const city = forcedCity && forcedCity.length > 0 ? forcedCity : await pickCity();
     const html = await createPoemHTML(city);
 
     const poem = {
