@@ -1,5 +1,10 @@
 {
+  "buildCommand": "next build",
+  "outputDirectory": ".next",
   "crons": [
-    { "path": "/api/cron/generate", "schedule": "10 0 * * *" }
+    {
+      "path": "/api/cron/generate",
+      "schedule": "10 0 * * *"
+    }
   ]
 }
