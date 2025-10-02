@@ -16,12 +16,15 @@ export async function GET(req: Request) {
   const dayId = parisDateId(parisNow);
 
   if (!force && await poemExistsForParisDate(dayId)) {
-    return NextResponse.json({ ok: true, skipped: true, reason: 'already generated today' }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json(
+      { ok: true, skipped: true, reason: 'already generated today' },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
   }
 
   let publishedAt: string;
   if (visible) {
-    const visibleParis = new Date(parisNow.getTime() - 1000); // maintenant - 1s
+    const visibleParis = new Date(parisNow.getTime() - 1000);
     publishedAt = format(visibleParis, "yyyy-MM-dd'T'HH:mm:ssXXX", { timeZone: 'Europe/Paris' });
   } else {
     const fifteen = new Date(parisNow);
@@ -33,6 +36,5 @@ export async function GET(req: Request) {
   const html = await createPoemHTML(city);
   const poem = { id: crypto.randomUUID(), city, html, publishedAt };
   await savePoem(poem);
-
   return NextResponse.json({ ok: true, created: poem }, { headers: { 'Cache-Control': 'no-store' } });
 }

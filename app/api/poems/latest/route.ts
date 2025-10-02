@@ -5,5 +5,5 @@ export const revalidate = 0;
 
 export async function GET() {
   const poem = await getLatestPoemBefore(new Date());
-  return NextResponse.json(poem, { headers:{'Cache-Control':'no-store'} });
+  return NextResponse.json(poem, { headers: { 'Cache-Control': 'no-store' } });
 }
