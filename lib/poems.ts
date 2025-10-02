@@ -1,188 +1,187 @@
-import { kv } from "@vercel/kv";
+import { randomUUID } from 'node:crypto';
 
-export type NormalizedPoem = { html: string; publishedAt: string };
+import { kv } from '@vercel/kv';
 
-const KEY_PATTERNS = ["poems", "poem", "poem:*", "poems:*", "daily:poem:*", "daily-poem:*"] as const;
+import { CITIES_FR } from './cities-fr';
 
-function parsePotentialJson(value: unknown): unknown {
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return value;
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      return value;
-    }
+export type Poem = {
+  id: string;
+  city: string;
+  html: string;
+  publishedAt: string;
+};
+
+const emptyArray: unknown[] = [];
+
+const ensureId = (value: unknown): string => {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value;
   }
 
-  return value;
-}
-
-function extractDateFromKey(key: string): string | null {
-  const match = key.match(/\d{4}-\d{2}-\d{2}/);
-  return match ? match[0] : null;
-}
-
-function toIsoDate(value: unknown): string | null {
-  if (value == null) return null;
-
-  if (value instanceof Date) {
-    const time = value.getTime();
-    return Number.isNaN(time) ? null : value.toISOString();
+  if (typeof globalThis.crypto !== 'undefined' && typeof globalThis.crypto.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
   }
 
-  if (typeof value === "number") {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  return randomUUID();
+};
+
+const parseMaybeJson = (value: unknown): unknown => {
+  if (typeof value !== 'string') {
+    return value;
   }
 
-  const stringified = String(value).trim();
-  if (!stringified) return null;
-
-  if (/^\d+$/.test(stringified)) {
-    const numericDate = Number(stringified);
-    if (!Number.isNaN(numericDate)) {
-      const date = new Date(numericDate);
-      if (!Number.isNaN(date.getTime())) {
-        return date.toISOString();
-      }
-    }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
   }
 
-  const parsed = new Date(stringified);
-  if (Number.isNaN(parsed.getTime())) return null;
-
-  return parsed.toISOString();
-}
-
-function pickHtml(record: Record<string, unknown>): string | null {
-  const candidates = [record.html, record.bodyHtml, record.body, record.content];
-  for (const candidate of candidates) {
-    if (candidate == null) continue;
-    const html = String(candidate).trim();
-    if (html) return html;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
   }
-  return null;
-}
+};
 
-function looksLikePoem(record: Record<string, unknown>): boolean {
-  return (
-    "html" in record ||
-    "bodyHtml" in record ||
-    "body" in record ||
-    "content" in record ||
-    "publishedAt" in record ||
-    "date" in record ||
-    "createdAt" in record ||
-    "updatedAt" in record
-  );
-}
-
-type ExtractedEntry = { record: unknown; derivedKey: string };
-
-function extractEntries(value: unknown, sourceKey: string): ExtractedEntry[] {
-  if (value == null) return [];
-
-  if (Array.isArray(value)) {
-    return value.map((item, index) => ({ record: item, derivedKey: `${sourceKey}[${index}]` }));
+const parseArrayLike = (value: unknown): unknown[] => {
+  const parsed = parseMaybeJson(value);
+  if (Array.isArray(parsed)) {
+    return parsed;
   }
 
-  if (typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    if (looksLikePoem(record)) {
-      return [{ record, derivedKey: sourceKey }];
-    }
+  return emptyArray;
+};
 
-    return Object.entries(record).map(([nestedKey, nestedValue]) => ({
-      record: nestedValue,
-      derivedKey: `${sourceKey}:${nestedKey}`,
-    }));
+const normalizePoem = (value: unknown): Poem | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
   }
 
-  return [{ record: value, derivedKey: sourceKey }];
-}
-
-function normalizePoem(value: unknown, key: string): NormalizedPoem | null {
-  if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
+  const html = typeof record.html === 'string' ? record.html : null;
+  const publishedAt = typeof record.publishedAt === 'string' ? record.publishedAt : null;
 
-  const html = pickHtml(record);
-  if (!html) return null;
-
-  const publishedAtCandidate =
-    record.publishedAt ?? record.date ?? record.createdAt ?? record.updatedAt ?? extractDateFromKey(key);
-
-  const publishedAt = toIsoDate(publishedAtCandidate ?? extractDateFromKey(key));
-  if (!publishedAt) return null;
-
-  return { html, publishedAt };
-}
-
-async function collectFromKey(key: string): Promise<NormalizedPoem[]> {
-  const raw = await kv.get(key);
-  const parsed = parsePotentialJson(raw);
-  const entries = extractEntries(parsed, key);
-  const poems: NormalizedPoem[] = [];
-
-  for (const { record, derivedKey } of entries) {
-    const parsedRecord = parsePotentialJson(record);
-    const normalized = normalizePoem(parsedRecord, derivedKey);
-    if (normalized) {
-      poems.push(normalized);
-    }
+  if (!html || !publishedAt) {
+    return null;
   }
 
-  return poems;
-}
+  const city = typeof record.city === 'string' ? record.city : '';
+  const id = ensureId(record.id);
 
-export async function getAllPoems(): Promise<NormalizedPoem[]> {
-  const collected: NormalizedPoem[] = [];
-  const seen = new Set<string>();
+  return { id, city, html, publishedAt };
+};
 
-  for (const key of KEY_PATTERNS) {
-    if (!key.includes("*")) {
-      const poems = await collectFromKey(key);
-      for (const poem of poems) {
-        const signature = `${poem.publishedAt}|${poem.html}`;
-        if (seen.has(signature)) continue;
-        seen.add(signature);
-        collected.push(poem);
-      }
-      continue;
-    }
+const sortByPublishedAtDesc = (a: Poem, b: Poem): number => {
+  const aTime = new Date(a.publishedAt).getTime();
+  const bTime = new Date(b.publishedAt).getTime();
+  return bTime - aTime;
+};
 
-    for await (const match of kv.scanIterator({ match: key })) {
-      if (typeof match !== "string") continue;
-      const poems = await collectFromKey(match);
-      for (const poem of poems) {
-        const signature = `${poem.publishedAt}|${poem.html}`;
-        if (seen.has(signature)) continue;
-        seen.add(signature);
-        collected.push(poem);
-      }
-    }
+export async function getAllPoems(): Promise<Poem[]> {
+  const byId = new Map<string, Poem>();
+
+  const aggregatedRaw = await kv.get('poems');
+  for (const entry of parseArrayLike(aggregatedRaw)) {
+    const poem = normalizePoem(entry);
+    if (!poem) continue;
+    byId.set(poem.id, poem);
   }
 
-  collected.sort((a, b) => {
-    const aTime = new Date(a.publishedAt).getTime();
-    const bTime = new Date(b.publishedAt).getTime();
-    return bTime - aTime;
-  });
+  for await (const key of kv.scanIterator({ match: 'poem:*' })) {
+    if (typeof key !== 'string') continue;
+    const raw = await kv.get(key);
+    const poem = normalizePoem(parseMaybeJson(raw));
+    if (!poem) continue;
+    byId.set(poem.id, poem);
+  }
 
-  return collected;
+  return [...byId.values()].sort(sortByPublishedAtDesc);
 }
 
-export async function getLatestPoemBefore(
-  now: Date,
-  preloadedPoems?: NormalizedPoem[]
-): Promise<NormalizedPoem | null> {
-  const all = preloadedPoems ?? (await getAllPoems());
-  if (all.length === 0) return null;
+export async function getLatestPoemBefore(now: Date): Promise<Poem | null> {
+  const all = await getAllPoems();
+  if (all.length === 0) {
+    return null;
+  }
 
   const past = all.filter((poem) => {
-    const publishedAt = new Date(poem.publishedAt);
-    return !Number.isNaN(publishedAt.getTime()) && publishedAt <= now;
+    const published = new Date(poem.publishedAt);
+    return !Number.isNaN(published.getTime()) && published <= now;
   });
 
   return past[0] ?? all[0] ?? null;
+}
+
+export async function getUsedCities(): Promise<Set<string>> {
+  const raw = await kv.get('cities:used');
+  const array = parseArrayLike(raw);
+  const set = new Set<string>();
+
+  for (const item of array) {
+    if (typeof item === 'string' && item) {
+      set.add(item);
+    }
+  }
+
+  return set;
+}
+
+export async function setUsedCities(set: Set<string>): Promise<void> {
+  const sorted = Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  await kv.set('cities:used', sorted);
+}
+
+export function pickRandom<T>(arr: T[]): T {
+  if (arr.length === 0) {
+    throw new Error('Cannot pick a random element from an empty array.');
+  }
+
+  const cryptoApi = typeof globalThis.crypto !== 'undefined' ? globalThis.crypto : null;
+  if (cryptoApi && typeof cryptoApi.getRandomValues === 'function') {
+    const buffer = new Uint32Array(1);
+    cryptoApi.getRandomValues(buffer);
+    const index = buffer[0] % arr.length;
+    return arr[index];
+  }
+
+  const index = Math.floor(Math.random() * arr.length);
+  return arr[index];
+}
+
+export async function pickCity(): Promise<string> {
+  let used = await getUsedCities();
+  let candidates = CITIES_FR.filter((city) => !used.has(city));
+
+  if (candidates.length === 0) {
+    used = new Set<string>();
+    candidates = [...CITIES_FR];
+  }
+
+  const city = pickRandom(candidates);
+  used.add(city);
+  await setUsedCities(used);
+  return city;
+}
+
+export async function createPoemHTML(city: string): Promise<string> {
+  return `
+    <div class="poem">
+      <p><strong>${city}</strong></p>
+      <p>les toits fument à 15h</p>
+      <p>je compte les fenêtres</p>
+      <p>le vent rature la rue</p>
+      <p>et pourtant tu reviens</p>
+    </div>
+  `.trim();
+}
+
+export async function savePoem(poem: Poem): Promise<void> {
+  const existing = parseArrayLike(await kv.get('poems'))
+    .map((entry) => normalizePoem(entry))
+    .filter((entry): entry is Poem => Boolean(entry));
+
+  existing.push(poem);
+
+  const trimmed = existing.slice(-365);
+  await kv.set('poems', trimmed);
+  await kv.set(`poem:${poem.id}`, poem);
 }
