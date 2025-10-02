@@ -1,47 +1,5 @@
 {
-  "cleanUrls": true,
-  "rewrites": [
-    {
-      "source": "/api/today",
-      "destination": "/api/today.js"
-    },
-    {
-      "source": "/api/cron-generate",
-      "destination": "/api/cron-generate.js"
-    },
-    {
-      "source": "/api/daily-rotate",
-      "destination": "/api/daily-rotate.js"
-    },
-    {
-      "source": "/api/rss-topics",
-      "destination": "/api/rss-topics.js"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store"
-        }
-      ]
-    },
-    {
-      "source": "/api/poems/latest",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store"
-        }
-      ]
-    }
-  ],
   "crons": [
-    {
-      "path": "/api/daily-rotate",
-      "schedule": "0 14 * * *"
-    }
+    { "path": "/api/cron/generate", "schedule": "0 15 * * *", "timeZone": "Europe/Paris" }
   ]
 }
