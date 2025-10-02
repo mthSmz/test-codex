@@ -23,22 +23,16 @@ export async function GET(req: Request) {
     const dayId = parisDateId(parisNow);
 
     if (!force && (await poemExistsForParisDate(dayId))) {
-      return NextResponse.json(
-        { ok: true, skipped: true, reason: "already generated today" },
-        { headers: { "Cache-Control": "no-store" } }
-      );
+      return NextResponse.json({ ok: true, skipped: true });
     }
 
-    // Choix de l’horodatage publishedAt
     let publishedAt: string;
     if (visible) {
-      // visible immédiatement
       const visibleParis = new Date(parisNow.getTime() - 1000);
       publishedAt = format(visibleParis, "yyyy-MM-dd'T'HH:mm:ssXXX", {
         timeZone: "Europe/Paris",
       });
     } else {
-      // publication à 15:00 Paris aujourd’hui
       const fifteen = new Date(parisNow);
       fifteen.setHours(15, 0, 0, 0);
       publishedAt = format(fifteen, "yyyy-MM-dd'T'HH:mm:ssXXX", {
@@ -46,7 +40,8 @@ export async function GET(req: Request) {
       });
     }
 
-    const city = forcedCity && forcedCity.length > 0 ? forcedCity : await pickCity();
+    const city =
+      forcedCity && forcedCity.length > 0 ? forcedCity : await pickCity();
     const html = await createPoemHTML(city);
 
     const poem = {
@@ -58,15 +53,9 @@ export async function GET(req: Request) {
 
     await savePoem(poem);
 
-    return NextResponse.json(
-      { ok: true, created: poem },
-      { headers: { "Cache-Control": "no-store" } }
-    );
+    return NextResponse.json({ ok: true, poem });
   } catch (err) {
     console.error("[manual-generate] error:", err);
-    return NextResponse.json(
-      { ok: false, error: "internal_error" },
-      { status: 200, headers: { "Cache-Control": "no-store" } }
-    );
+    return NextResponse.json({ ok: false, error: "internal" }, { status: 200 });
   }
 }
