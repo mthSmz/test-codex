@@ -18,23 +18,6 @@ une cellule avec la souris et les 9 autres sont pilotées par des IA basiques.
 - 300 particules de nourriture qui réapparaissent en continu.
 - Classement en direct des 10 participants.
 - Réapparition automatique des joueurs éliminés après un court délai.
-- Générateur d'identifiants robuste : `crypto.randomUUID` →
-  `crypto.getRandomValues` → identifiant horodaté unique en ultime recours.
-
-## Dépannage : conflit récurrent sur le README
-
-Si vous voyez apparaître des marqueurs `<<<<<<<`, `=======`, `>>>>>>>` dans le
-README, c'est que deux branches ont modifié exactement la même puce de la
-section « Fonctionnalités ». Git ne peut pas deviner laquelle choisir : il faut
-éditer manuellement la ligne pour conserver une unique formulation, puis
-supprimer les marqueurs avant d'enregistrer le fichier.
-
-En pratique :
-
-1. `git status` pour identifier les fichiers en conflit.
-2. Ouvrez `README.md`, supprimez les marqueurs et gardez une seule version de
-   la puce (celle ci-dessus résume déjà les trois niveaux de repli).
-3. `git add README.md` puis poursuivez votre merge ou votre rebase.
 
 Ce projet ne nécessite aucune dépendance ni serveur : tout est géré côté client.
 

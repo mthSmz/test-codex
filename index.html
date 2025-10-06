@@ -103,31 +103,8 @@
         color: randColor(),
       });
 
-      const generateId = (() => {
-        if (typeof crypto !== "undefined") {
-          if (typeof crypto.randomUUID === "function") {
-            return () => crypto.randomUUID();
-          }
-
-          if (typeof crypto.getRandomValues === "function") {
-            const buffer = new Uint8Array(16);
-            return () => {
-              crypto.getRandomValues(buffer);
-              buffer[6] = (buffer[6] & 0x0f) | 0x40;
-              buffer[8] = (buffer[8] & 0x3f) | 0x80;
-              const hex = [...buffer].map((b) => b.toString(16).padStart(2, "0"));
-              return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex
-                .slice(6, 8)
-                .join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
-            };
-          }
-        }
-
-        return () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-      })();
-
       const createPlayer = (name, isHuman = false) => ({
-        id: generateId(),
+        id: crypto.randomUUID(),
         type: "player",
         name,
         isHuman,
@@ -281,21 +258,6 @@
         });
 
         // Player vs player
-        const attemptConsume = (eater, prey, eaterRadius, preyRadius, dist) => {
-          if (eater.mass <= prey.mass * config.eatRatio) {
-            return false;
-          }
-
-          const containmentDistance = Math.max(0, eaterRadius - preyRadius);
-          if (dist <= containmentDistance) {
-            eater.mass += prey.mass * 0.9;
-            eliminate(prey);
-            return true;
-          }
-
-          return false;
-        };
-
         for (let i = 0; i < state.players.length; i++) {
           const a = state.players[i];
           if (a.respawnCooldown > 0) continue;
@@ -306,11 +268,12 @@
             const dist = distance(a, b);
             const ra = radiusFromMass(a.mass);
             const rb = radiusFromMass(b.mass);
-
-            if (a.mass > b.mass) {
-              if (attemptConsume(a, b, ra, rb, dist)) continue;
-            } else if (b.mass > a.mass) {
-              if (attemptConsume(b, a, rb, ra, dist)) break;
+            if (a.mass > b.mass && a.mass > b.mass * config.eatRatio && dist < ra - rb * 0.2) {
+              a.mass += b.mass * 0.9;
+              eliminate(b);
+            } else if (b.mass > a.mass && b.mass > a.mass * config.eatRatio && dist < rb - ra * 0.2) {
+              b.mass += a.mass * 0.9;
+              eliminate(a);
             }
           }
         }
