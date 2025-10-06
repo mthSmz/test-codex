@@ -18,6 +18,8 @@ une cellule avec la souris et les 9 autres sont pilotées par des IA basiques.
 - 300 particules de nourriture qui réapparaissent en continu.
 - Classement en direct des 10 participants.
 - Réapparition automatique des joueurs éliminés après un court délai.
+- Générateur d'identifiants compatible avec les navigateurs ne supportant pas
+  `crypto.randomUUID`.
 
 Ce projet ne nécessite aucune dépendance ni serveur : tout est géré côté client.
 
