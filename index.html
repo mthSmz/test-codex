@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agar.io simplifié</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #111;
+        color: #f5f5f5;
+      }
+
+      #hud {
+        position: absolute;
+        top: 1rem;
+        left: 1rem;
+        z-index: 2;
+        background: rgba(0, 0, 0, 0.5);
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        max-width: 260px;
+      }
+
+      #hud h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.2rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1rem;
+      }
+
+      #hud p,
+      #hud li {
+        margin: 0.2rem 0;
+        font-size: 0.9rem;
+        line-height: 1.3;
+      }
+
+      #scoreboard {
+        margin: 0.5rem 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        background: radial-gradient(circle, #1c1f2b 0%, #0d0f18 70%);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="hud">
+      <h1>Agar.io 10 joueurs</h1>
+      <p>
+        Déplacez votre cellule avec la souris. Mangez les plus petits pour
+        grandir. Évitez les plus gros !
+      </p>
+      <ul id="scoreboard"></ul>
+    </div>
+    <canvas id="game"></canvas>
+    <script>
+      const config = {
+        worldSize: 2000,
+        baseSpeed: 160,
+        playerCount: 10,
+        botCount: 9,
+        foodCount: 300,
+        maxZoom: 1.5,
+        minZoom: 0.3,
+        eatRatio: 1.1,
+      };
+
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const scoreboard = document.getElementById("scoreboard");
+
+      let width = window.innerWidth;
+      let height = window.innerHeight;
+      canvas.width = width;
+      canvas.height = height;
+
+      window.addEventListener("resize", () => {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+      });
+
+      const randColor = () =>
+        `hsl(${Math.floor(Math.random() * 360)}, 70%, 60%)`;
+
+      const createFood = () => ({
+        type: "food",
+        x: Math.random() * config.worldSize - config.worldSize / 2,
+        y: Math.random() * config.worldSize - config.worldSize / 2,
+        mass: 5,
+        color: randColor(),
+      });
+
+      const generateId = () => {
+        if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+          return crypto.randomUUID();
+        }
+
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      };
+
+      const createPlayer = (name, isHuman = false) => ({
+        id: generateId(),
+        type: "player",
+        name,
+        isHuman,
+        x: Math.random() * config.worldSize - config.worldSize / 2,
+        y: Math.random() * config.worldSize - config.worldSize / 2,
+        mass: 60,
+        color: randColor(),
+        vx: 0,
+        vy: 0,
+        target: null,
+        respawnCooldown: 0,
+      });
+
+      const state = {
+        human: createPlayer("Vous", true),
+        players: [],
+        foods: Array.from({ length: config.foodCount }, createFood),
+        mouse: { x: 0, y: 0 },
+        lastTime: performance.now(),
+      };
+
+      state.players.push(state.human);
+
+      for (let i = 0; i < config.botCount; i++) {
+        state.players.push(createPlayer(`Bot ${i + 1}`));
+      }
+
+      canvas.addEventListener("mousemove", (event) => {
+        const rect = canvas.getBoundingClientRect();
+        state.mouse.x = event.clientX - rect.left;
+        state.mouse.y = event.clientY - rect.top;
+      });
+
+      const radiusFromMass = (mass) => Math.sqrt(mass) * 4;
+
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+      const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+      function update(delta) {
+        state.players.forEach((player) => {
+          if (player.respawnCooldown > 0) {
+            player.respawnCooldown -= delta;
+            if (player.respawnCooldown <= 0) {
+              Object.assign(player, createPlayer(player.name, player.isHuman));
+            }
+            return;
+          }
+
+          if (player.isHuman) {
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const dirX = state.mouse.x - centerX;
+            const dirY = state.mouse.y - centerY;
+            const length = Math.hypot(dirX, dirY) || 1;
+            const normX = dirX / length;
+            const normY = dirY / length;
+            const speed = config.baseSpeed / Math.sqrt(player.mass);
+            player.vx = normX * speed;
+            player.vy = normY * speed;
+          } else {
+            aiControl(player, delta);
+          }
+
+          player.x += player.vx * delta;
+          player.y += player.vy * delta;
+          const r = radiusFromMass(player.mass);
+          const half = config.worldSize / 2 - r;
+          player.x = clamp(player.x, -half, half);
+          player.y = clamp(player.y, -half, half);
+        });
+
+        handleCollisions();
+        replenishFood();
+        updateScoreboard();
+      }
+
+      function aiControl(bot, delta) {
+        const visiblePlayers = state.players.filter((p) => p !== bot && p.respawnCooldown <= 0);
+        let target = null;
+        let flee = null;
+
+        visiblePlayers.forEach((other) => {
+          const dist = distance(bot, other);
+          if (other.mass * config.eatRatio < bot.mass) {
+            if (!target || dist < target.dist) {
+              target = { entity: other, dist };
+            }
+          } else if (bot.mass * config.eatRatio < other.mass) {
+            if (!flee || dist < flee.dist) {
+              flee = { entity: other, dist };
+            }
+          }
+        });
+
+        if (flee) {
+          const dirX = bot.x - flee.entity.x;
+          const dirY = bot.y - flee.entity.y;
+          const len = Math.hypot(dirX, dirY) || 1;
+          bot.vx = (dirX / len) * (config.baseSpeed / Math.sqrt(bot.mass));
+          bot.vy = (dirY / len) * (config.baseSpeed / Math.sqrt(bot.mass));
+          return;
+        }
+
+        if (!target) {
+          const foodTarget = findClosestFood(bot);
+          if (foodTarget) {
+            target = { entity: foodTarget, dist: distance(bot, foodTarget) };
+          }
+        }
+
+        if (target) {
+          const dirX = target.entity.x - bot.x;
+          const dirY = target.entity.y - bot.y;
+          const len = Math.hypot(dirX, dirY) || 1;
+          const speed = config.baseSpeed / Math.sqrt(bot.mass);
+          bot.vx = (dirX / len) * speed;
+          bot.vy = (dirY / len) * speed;
+        } else {
+          const angle = performance.now() / 1000 + bot.id.length;
+          bot.vx = Math.cos(angle) * (config.baseSpeed / Math.sqrt(bot.mass)) * 0.4;
+          bot.vy = Math.sin(angle) * (config.baseSpeed / Math.sqrt(bot.mass)) * 0.4;
+        }
+      }
+
+      function findClosestFood(player) {
+        let best = null;
+        let bestDist = Infinity;
+        for (const food of state.foods) {
+          const dist = distance(player, food);
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = food;
+          }
+        }
+        return best;
+      }
+
+      function handleCollisions() {
+        // Player vs food
+        state.players.forEach((player) => {
+          if (player.respawnCooldown > 0) return;
+          for (let i = state.foods.length - 1; i >= 0; i--) {
+            const food = state.foods[i];
+            const dist = distance(player, food);
+            if (dist < radiusFromMass(player.mass)) {
+              player.mass += food.mass;
+              state.foods.splice(i, 1);
+            }
+          }
+        });
+
+        // Player vs player
+        for (let i = 0; i < state.players.length; i++) {
+          const a = state.players[i];
+          if (a.respawnCooldown > 0) continue;
+          for (let j = i + 1; j < state.players.length; j++) {
+            const b = state.players[j];
+            if (b.respawnCooldown > 0) continue;
+
+            const dist = distance(a, b);
+            const ra = radiusFromMass(a.mass);
+            const rb = radiusFromMass(b.mass);
+            if (a.mass > b.mass && a.mass > b.mass * config.eatRatio && dist < ra - rb * 0.2) {
+              a.mass += b.mass * 0.9;
+              eliminate(b);
+            } else if (b.mass > a.mass && b.mass > a.mass * config.eatRatio && dist < rb - ra * 0.2) {
+              b.mass += a.mass * 0.9;
+              eliminate(a);
+            }
+          }
+        }
+      }
+
+      function eliminate(player) {
+        player.respawnCooldown = 3;
+        player.mass = 0;
+        player.vx = 0;
+        player.vy = 0;
+      }
+
+      function replenishFood() {
+        while (state.foods.length < config.foodCount) {
+          state.foods.push(createFood());
+        }
+      }
+
+      function updateScoreboard() {
+        const alivePlayers = state.players
+          .slice()
+          .sort((a, b) => b.mass - a.mass)
+          .map((player) => ({
+            name: player.name,
+            score: Math.round(player.mass),
+            alive: player.respawnCooldown <= 0,
+          }));
+
+        scoreboard.innerHTML = alivePlayers
+          .map(
+            (player, index) => `
+              <li>
+                ${index + 1}. ${player.name}
+                ${player.alive ? `<strong>${player.score}</strong>` : "<em>KO</em>"}
+              </li>
+            `
+          )
+          .join("");
+      }
+
+      function draw() {
+        const human = state.human;
+        const zoom = clamp(200 / radiusFromMass(human.mass), config.minZoom, config.maxZoom);
+
+        ctx.setTransform(zoom, 0, 0, zoom, width / 2, height / 2);
+        ctx.fillStyle = "#0d0f18";
+        ctx.fillRect(-width, -height, width * 2, height * 2);
+
+        drawGrid(zoom);
+
+        state.foods.forEach((food) => {
+          ctx.beginPath();
+          ctx.fillStyle = food.color;
+          ctx.arc(food.x - human.x, food.y - human.y, radiusFromMass(food.mass) * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        state.players.forEach((player) => {
+          const r = radiusFromMass(player.mass);
+          ctx.beginPath();
+          ctx.fillStyle = player.color;
+          ctx.globalAlpha = player.respawnCooldown > 0 ? 0.3 : 0.9;
+          ctx.arc(player.x - human.x, player.y - human.y, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+
+          ctx.fillStyle = "#fff";
+          ctx.font = `${Math.max(12, r / 2)}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.fillText(player.name, player.x - human.x, player.y - human.y + 4);
+        });
+      }
+
+      function drawGrid(zoom) {
+        const spacing = 80;
+        const human = state.human;
+        const startX = Math.floor((human.x - width) / spacing) * spacing;
+        const endX = Math.floor((human.x + width) / spacing) * spacing;
+        const startY = Math.floor((human.y - height) / spacing) * spacing;
+        const endY = Math.floor((human.y + height) / spacing) * spacing;
+
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+        ctx.lineWidth = 1 / zoom;
+
+        for (let x = startX; x <= endX; x += spacing) {
+          ctx.beginPath();
+          ctx.moveTo(x - human.x, startY - human.y);
+          ctx.lineTo(x - human.x, endY - human.y);
+          ctx.stroke();
+        }
+
+        for (let y = startY; y <= endY; y += spacing) {
+          ctx.beginPath();
+          ctx.moveTo(startX - human.x, y - human.y);
+          ctx.lineTo(endX - human.x, y - human.y);
+          ctx.stroke();
+        }
+      }
+
+      function loop() {
+        const now = performance.now();
+        const delta = (now - state.lastTime) / 1000;
+        state.lastTime = now;
+
+        update(delta);
+        draw();
+
+        requestAnimationFrame(loop);
+      }
+
+      updateScoreboard();
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>
