@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>La France a-t-elle un Premier Ministre ?</title>
+  <style>
+    :root{--bg:#f3f5f7;--ink:#0d1b2a;--accent:#b33930}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:radial-gradient(1200px 800px at 30% 20%, #ffffff 0%, var(--bg) 60%, #e9edf1 100%);
+      color:var(--ink);
+      font-family: system-ui,-apple-system,Segoe UI,Roboto,Inter,Ubuntu,"Helvetica Neue",Arial,sans-serif;
+    }
+    .page{
+      min-height:100svh;
+      display:grid;
+      place-items:center;
+      padding:clamp(16px,4vw,40px);
+      text-align:center;
+    }
+    .stack{display:flex;flex-direction:column;gap:clamp(12px,2.8vh,28px);align-items:center;max-width:1000px}
+    .big{
+      font-weight:900;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+      color:var(--accent);
+      font-size:clamp(28px,8vw,88px);
+      line-height:1.02;
+      margin:0;
+    }
+    .question{
+      font-weight:700;
+      font-size:clamp(20px,4.2vw,44px);
+      line-height:1.15;
+      margin:0;
+    }
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  </style>
+</head>
+<body>
+  <main class="page" role="main" aria-labelledby="titre">
+    <h1 id="titre" class="sr-only">La France a-t-elle un Premier Ministre ?</h1>
+    <div class="stack">
+      <p class="big">NON, TOUJOURS PAS.</p>
+      <p class="question">La France a-t-elle un Premier Ministre&nbsp;?</p>
+    </div>
+  </main>
+</body>
+</html>
